@@ -1,0 +1,5 @@
+* text=auto eol=lf
+*.woff binary
+*.mp3 binary
+*.png binary
+vendor/pixi.min.js -diff linguist-vendored

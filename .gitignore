@@ -1,0 +1,14 @@
+# build output (python3 build.py recreates it)
+dist/
+
+# test run artifacts
+test/*.png
+test/*.raw
+test/*.f32
+mock/*.png
+
+# local junk
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
