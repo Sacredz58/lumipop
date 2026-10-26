@@ -49,8 +49,11 @@ def build_target(name):
         shutil.copy(os.path.join(VENDOR, 'music.mp3'), out)
     z = os.path.join(DIST, f'lumipop-{name}.zip')
     with zipfile.ZipFile(z, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for fn in sorted(os.listdir(out)):
-            zf.write(os.path.join(out, fn), fn)       # index.html at the archive root
+        for fn in sorted(os.listdir(out)):          # index.html at the archive root
+            info = zipfile.ZipInfo(fn, date_time=(2026, 1, 1, 0, 0, 0))  # fixed date: same code -> same zip
+            info.compress_type = zipfile.ZIP_DEFLATED
+            with open(os.path.join(out, fn), 'rb') as f:
+                zf.writestr(info, f.read())
     size = sum(os.path.getsize(os.path.join(out, f)) for f in os.listdir(out))
     print(f'{name:11s} {size / 1024:7.0f} KB unpacked  {os.path.getsize(z) / 1024:6.0f} KB zip')
 
@@ -72,8 +75,18 @@ def build_artifact():
     print('artifact page written')
 
 
+def publish_builds():
+    """Copy the storefront archives into build/, which is kept in git."""
+    out = os.path.join(ROOT, 'build')
+    os.makedirs(out, exist_ok=True)
+    for t in ('yandex', 'vk', 'crazygames', 'poki'):
+        shutil.copy(os.path.join(DIST, f'lumipop-{t}.zip'), out)
+    print('build/ updated')
+
+
 if __name__ == '__main__':
     os.makedirs(DIST, exist_ok=True)
     for t in SDK:
         build_target(t)
     build_artifact()
+    publish_builds()
