@@ -24,9 +24,11 @@ def read(*p):
         return f.read()
 
 
-def game_js():
+def game_js(orbs='orbs.png'):
     music = os.path.join(VENDOR, 'music.json')
     head = f'window.__MUSIC__ = {read(music).strip()};\n' if os.path.exists(music) else ''
+    if os.path.exists(os.path.join(VENDOR, 'orbs.png')):
+        head += f'window.__ORBS__ = "{orbs}";\n'
     return head + '\n'.join(read(SRC, n) for n in ('platform.js', 'audio.js', 'i18n.js', 'levels.js', 'meta.js', 'game.js', 'menus.js'))
 
 
@@ -45,6 +47,8 @@ def build_target(name):
         f.write(game_js())
     shutil.copy(os.path.join(VENDOR, 'pixi.min.js'), out)
     shutil.copy(os.path.join(VENDOR, 'lumi.woff'), out)
+    if os.path.exists(os.path.join(VENDOR, 'orbs.png')):
+        shutil.copy(os.path.join(VENDOR, 'orbs.png'), out)
     if os.path.exists(os.path.join(VENDOR, 'music.mp3')):
         shutil.copy(os.path.join(VENDOR, 'music.mp3'), out)
     z = os.path.join(DIST, f'lumipop-{name}.zip')
@@ -67,7 +71,8 @@ def build_artifact():
     body = re.search(r'<body>(.*)</body>', html, re.S).group(1)
     head = re.sub(r'<meta[^>]*>\s*', '', head).replace('<!--SDK-->', '<script>window.__TARGET__="web"</script>')
     body = body.replace('<!--PIXI-->', f'<script src="{PIXI_CDN}"></script>')
-    body = body.replace('<!--GAME-->', '<script>\n' + game_js() + '\n</script>')
+    orbs = 'data:image/png;base64,' + base64.b64encode(open(os.path.join(VENDOR, 'orbs.png'), 'rb').read()).decode() if os.path.exists(os.path.join(VENDOR, 'orbs.png')) else ''
+    body = body.replace('<!--GAME-->', '<script>\n' + game_js(orbs) + '\n</script>')
     with open(os.path.join(DIST, 'lumipop-artifact.html'), 'w', encoding='utf-8') as f:
         f.write(head.strip() + '\n' + body.strip() + '\n')
     if os.path.exists(os.path.join(VENDOR, 'music.mp3')):

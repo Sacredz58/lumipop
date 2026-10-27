@@ -162,13 +162,32 @@
       shade(g, x, y, r);
     }
   }
+  // painted orb sprites (vendor/orbs.png, 4x4 cells of 128 px, cell index = orb code; 13 = ice shell)
+  let ORB_IMG = null;
+  function loadOrbAtlas() {
+    if (!window.__ORBS__) return Promise.resolve();
+    return new Promise((res) => {
+      const im = new Image();
+      im.onload = () => { ORB_IMG = im; res(); };
+      im.onerror = () => res();
+      im.src = window.__ORBS__;
+    });
+  }
+  function atlasCell(g, idx, N, alpha) {
+    g.globalAlpha = alpha || 1;
+    g.drawImage(ORB_IMG, (idx % 4) * 128, Math.floor(idx / 4) * 128, 128, 128, 0, 0, N, N);
+    g.globalAlpha = 1;
+  }
   function orbCanvas(code, pal, style, N) {
     N = N || 128; const [c, g] = canvas(N), x = N / 2, y = N / 2, r = N / 2 - 2;
-    if (code < 6) drawColorOrb(g, code, x, y, r, pal || PAL, style || STYLE); else drawSpecial(g, code, x, y, r);
+    const st = style || STYLE;
+    if (ORB_IMG && (code >= 6 || st === 'glow')) atlasCell(g, code, N);
+    else if (code < 6) drawColorOrb(g, code, x, y, r, pal || PAL, st); else drawSpecial(g, code, x, y, r);
     return c;
   }
   function iceOverlay() {
     const N = 128, [c, g] = canvas(N), x = N / 2, y = N / 2, r = N / 2 - 2;
+    if (ORB_IMG) { atlasCell(g, 13, N, 0.9); return c; }
     const ig = g.createRadialGradient(x - r * 0.2, y - r * 0.3, r * 0.2, x, y, r);
     ig.addColorStop(0, 'rgba(240,252,255,.55)'); ig.addColorStop(0.7, 'rgba(190,235,255,.45)'); ig.addColorStop(1, 'rgba(150,215,255,.8)');
     g.fillStyle = ig; disc(g, x, y, r); g.fill();
@@ -1082,6 +1101,7 @@
     const saved = await P.load();
     const sv = saved && (saved.v === 2 || saved.v === 1) ? saved : null;
     M.load(sv && sv.meta); M.save = save;
+    await loadOrbAtlas();
     const sk = SKINS[M.d.orb] || SKINS.lumi; PAL = sk.pal; STYLE = sk.style; BG = BGS[M.d.bg] || BGS.night; computeTint();
     buildTextures();
 

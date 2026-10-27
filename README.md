@@ -74,6 +74,10 @@ python3 build.py
 
 `index.html?debug` открывает `window.__lumi`: прицел, выстрел, добавление рядов, состояние игры. Без `?debug` объект не создаётся.
 
+## Шары
+
+Нарисованные шары лежат в `vendor/orbs.png` (атлас 4×4 по 128 px, номер ячейки = код шара). Исходный лист — `tools/orbs-sheet.png`; пересобрать атлас: `python3 tools/make_orbs.py tools/orbs-sheet.png`. Если атласа нет, игра рисует шары кодом. Скины из магазина (Леденцы, Самоцветы, Планеты) рисуются кодом.
+
 ## Шрифт
 
 Inter Display ExtraBold, урезанный до латиницы и кириллицы (`vendor/lumi.woff`). Лицензия SIL Open Font License 1.1.
