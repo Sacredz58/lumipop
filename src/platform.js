@@ -17,6 +17,8 @@
     code = (code || '').toLowerCase().slice(0, 2);
     return ['ru', 'be', 'kk', 'uk', 'uz'].includes(code) ? 'ru' : 'en';
   }
+  /** an SDK call that may never settle outside its storefront (opened directly, no host frame) */
+  const within = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('timeout')), ms))]);
   function urlParam(name) {
     try { return new URLSearchParams(location.search).get(name); } catch (e) { return null; }
   }
@@ -55,12 +57,12 @@
           await window.PokiSDK.init().catch(() => {});
         } else if (TARGET === 'pikabu' && window.PkbSDK && window.parent !== window) {   // opened directly (not in Pikabu's frame): the SDK would echo to itself forever
           // outside Pikabu (a plain link, no test environment) init never settles: don't let it hold the game
-          this._pk = await Promise.race([window.PkbSDK.init(), new Promise((_, no) => setTimeout(() => no(new Error('PkbSDK.init timeout')), 5000))]);
+          this._pk = await within(window.PkbSDK.init(), 5000);
           try { this.hasRewarded = !!this._pk.ads.rewarded.isSupported; } catch (e) {}
-        } else if (TARGET === 'vk' && window.vkBridge) {
+        } else if (TARGET === 'vk' && window.vkBridge && window.parent !== window) {   // outside VK's frame there is nobody to answer
+          await within(window.vkBridge.send('VKWebAppInit'), 5000);
           this._vk = window.vkBridge;
-          await this._vk.send('VKWebAppInit').catch(() => {});
-          this.lang = pickLang(urlParam('vk_language') === '0' ? 'ru' : urlParam('vk_language') === '3' ? 'en' : navigator.language);
+          this.lang = urlParam('vk_language') === '3' ? 'en' : 'ru';   // VK: Russian unless the VK interface is English
           this._vk.subscribe((e) => {
             const t = e && e.detail && e.detail.type;
             if (t === 'VKWebAppViewHide') emit('pause');
@@ -229,11 +231,11 @@
         else if (this._pk) data = this._pk.storage.get(SAVE_KEY) || null;
         else if (this._vk) {
           // VK keeps at most 4096 bytes per key, so the save is split into chunks
-          const head = await this._vk.send('VKWebAppStorageGet', { keys: [SAVE_KEY + '_n'] });
+          const head = await within(this._vk.send('VKWebAppStorageGet', { keys: [SAVE_KEY + '_n'] }), 5000);
           const n = parseInt(head && head.keys && head.keys[0] && head.keys[0].value, 10) || 0;
           if (n > 0) {
             const keys = []; for (let i = 0; i < n; i++) keys.push(SAVE_KEY + '_' + i);
-            const r = await this._vk.send('VKWebAppStorageGet', { keys });
+            const r = await within(this._vk.send('VKWebAppStorageGet', { keys }), 5000);
             const map = {}; (r.keys || []).forEach((k) => { map[k.key] = k.value; });
             data = JSON.parse(keys.map((k) => map[k] || '').join(''));
           }

@@ -155,11 +155,17 @@ body.land #hudSub{font-size:14px;white-space:normal}
 #tip{position:fixed;transform:translate(-50%,-100%);font-size:14px;background:rgba(20,14,60,.85);border:1px solid var(--line);padding:9px 15px;border-radius:999px;pointer-events:none;white-space:nowrap;z-index:8;animation:bob 1.6s ease-in-out infinite}
 @keyframes bob{50%{transform:translate(-50%,calc(-100% - 6px))}}
 #toast{white-space:pre-line;position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);font-size:15px;background:rgba(20,14,60,.94);border:1px solid var(--line);padding:12px 18px;border-radius:16px;pointer-events:none;z-index:40;text-align:center;max-width:80vw;line-height:1.35}
+/* loading spinner until the first screen is ready (VK asks for a visible loading state) */
+#boot{position:fixed;inset:0;display:grid;place-items:center;z-index:50;pointer-events:none;transition:opacity .3s}
+#boot i{width:44px;height:44px;border-radius:50%;border:4px solid rgba(255,255,255,.15);border-top-color:#ffcc4d;animation:spin .8s linear infinite}
+#boot.done{opacity:0}
+@keyframes spin{to{transform:rotate(360deg)}}
 #err{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;font-size:16px;color:var(--mute)}
 @media (prefers-reduced-motion:reduce){#tip,.card,.stars span{animation:none}}
 </style>
 </head>
 <body>
+<div id="boot" aria-hidden="true"><i></i></div>
 <div id="stage"></div>
 <div id="safe"></div>
 

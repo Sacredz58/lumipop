@@ -98,16 +98,17 @@ def build_artifact():
 
 def publish_builds():
     """Copy the storefront archives into build/, which is kept in git, and the Pikabu build into
-    docs/pikabu/ — Pikabu takes a link, not an upload, so GitHub Pages (main, /docs) hosts it."""
+    docs/pikabu/ and docs/vk/ — those storefronts take a link, so GitHub Pages (main, /docs) hosts them."""
     out = os.path.join(ROOT, 'build')
     os.makedirs(out, exist_ok=True)
     for t in ('yandex', 'vk', 'crazygames', 'poki', 'pikabu'):
         shutil.copy(os.path.join(DIST, f'lumipop-{t}.zip'), out)
-    pages = os.path.join(ROOT, 'docs', 'pikabu')
-    shutil.rmtree(pages, ignore_errors=True)
-    shutil.copytree(os.path.join(DIST, 'pikabu'), pages)
+    for t in ('pikabu', 'vk'):   # storefronts that take a link: GitHub Pages serves docs/<target>/
+        pages = os.path.join(ROOT, 'docs', t)
+        shutil.rmtree(pages, ignore_errors=True)
+        shutil.copytree(os.path.join(DIST, t), pages)
     open(os.path.join(ROOT, 'docs', '.nojekyll'), 'w').close()
-    print('build/ and docs/pikabu/ updated')
+    print('build/ and docs/ updated')
 
 
 if __name__ == '__main__':

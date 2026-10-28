@@ -1196,7 +1196,7 @@
       await app.init({ resizeTo: window, background: '#0a0b24', antialias: true, autoDensity: true,
         resolution: Math.min(window.devicePixelRatio || 1, 2), preference: 'webgl', powerPreference: 'high-performance' });
     } catch (e) {
-      document.body.insertAdjacentHTML('beforeend', '<div id="err">WebGL is not available in this browser.</div>'); return;
+      document.body.insertAdjacentHTML('beforeend', '<div id="err">WebGL is not available in this browser.</div>'); $('boot') && $('boot').remove(); return;
     }
     $('stage').appendChild(app.canvas);
 
@@ -1252,6 +1252,7 @@
     app.ticker.add((tk) => update(Math.min(tk.deltaMS / 1000, 0.05)));
     st.mode = 'menu'; $('hud').hidden = true; $('boost').hidden = true;
     emit('ready', {});
+    const bootEl = $('boot'); if (bootEl) { bootEl.classList.add('done'); setTimeout(() => bootEl.remove(), 400); }
     P.ready();
 
     let __t = 0;

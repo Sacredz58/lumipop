@@ -30,10 +30,16 @@ with sync_playwright() as p:
         pg = b.new_page(viewport={'width': 390, 'height': 844}); errs = []
         pg.on('pageerror', lambda e: errs.append(str(e)))
         pg.route(URL[t], lambda r, req=None, body=MOCK[t]: r.fulfill(status=200, content_type='application/javascript', body=body))
-        pg.goto(f'http://127.0.0.1:8766/{t}/index.html?debug')
+        top = pg
+        if t == 'vk':   # VK runs the game inside its frame (outside it the platform code skips the bridge)
+            open('dist/vk-host.html', 'w').write('<!doctype html><body style="margin:0"><iframe src="vk/index.html?debug&vk_language=0" style="border:0;width:100vw;height:100vh"></iframe></body>')
+            pg.goto('http://127.0.0.1:8766/vk-host.html'); pg.wait_for_timeout(500)
+            pg = next(f for f in top.frames if 'vk/index.html' in f.url)
+        else:
+            pg.goto(f'http://127.0.0.1:8766/{t}/index.html?debug')
         pg.wait_for_function('window.__lumi && !document.getElementById("ov").hidden')
         if pg.locator('[data-act=gift]').count(): pg.click('[data-act=gift]')
-        pg.click('[data-act=endless]'); pg.mouse.click(195, 300); pg.wait_for_timeout(1500)
+        pg.click('[data-act=endless]'); top.mouse.click(195, 300); pg.wait_for_timeout(1500)
         pg.evaluate("Platform._lastInterstitial=0")
         pg.evaluate('__lumi.fill(6)')
         play_until_over(pg, -1.2)
@@ -48,5 +54,12 @@ with sync_playwright() as p:
                 dedup.append(c)
         print(t, '| lang', pg.evaluate('document.documentElement.lang'), '| mode', pg.evaluate('__lumi.st.mode'))
         print('   ', ' > '.join(dedup)); print('    errors:', errs or 'none')
-        pg.close()
+        top.close()
+    # VK build opened directly with a bridge that never answers: the menu still comes up
+    pg = b.new_page(viewport={'width': 390, 'height': 844}); errs = []
+    pg.on('pageerror', lambda e: errs.append(str(e)))
+    pg.route('**/browser.min.js', lambda r: r.fulfill(status=200, content_type='application/javascript', body='window.vkBridge={send:()=>new Promise(()=>{}),subscribe:()=>{}};'))
+    pg.goto('http://127.0.0.1:8766/vk/index.html?debug')
+    pg.wait_for_function('window.__lumi && !document.getElementById("ov").hidden', timeout=15000)
+    print('vk direct | menu up, lang', pg.evaluate('document.documentElement.lang'), '| errors:', errs or 'none')
     b.close()
