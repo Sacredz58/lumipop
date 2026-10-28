@@ -55,8 +55,9 @@ window.__SKINS__ = "data:image/webp;base64,UklGRvANAgBXRUJQVlA4WAoAAAAQAAAA/wIAf
           try { this._cg.game.loadingStart(); } catch (e) {}
         } else if (TARGET === 'poki' && window.PokiSDK) {
           await window.PokiSDK.init().catch(() => {});
-        } else if (TARGET === 'pikabu' && window.PkbSDK) {
-          this._pk = await window.PkbSDK.init();
+        } else if (TARGET === 'pikabu' && window.PkbSDK && window.parent !== window) {   // opened directly (not in Pikabu's frame): the SDK would echo to itself forever
+          // outside Pikabu (a plain link, no test environment) init never settles: don't let it hold the game
+          this._pk = await Promise.race([window.PkbSDK.init(), new Promise((_, no) => setTimeout(() => no(new Error('PkbSDK.init timeout')), 5000))]);
           try { this.hasRewarded = !!this._pk.ads.rewarded.isSupported; } catch (e) {}
         } else if (TARGET === 'vk' && window.vkBridge) {
           this._vk = window.vkBridge;

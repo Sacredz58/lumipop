@@ -25,18 +25,23 @@ window.PkbSDK = { init: async () => (log('init'), {
 
 with sync_playwright() as p:
     b = p.chromium.launch(args=['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
-    for blocked in (False, True):
+    for blocked in (False, True, 'hang'):
         ctx = b.new_context(viewport={'width': 390, 'height': 844}, locale='en-US')   # English browser: Pikabu still starts in Russian
         pg = ctx.new_page(); errs = []
         pg.on('pageerror', lambda e: errs.append(str(e)))
-        if blocked: pg.route('**/sdk/sdk.js', lambda r: r.abort())
+        if blocked == 'hang': pg.route('**/sdk/sdk.js', lambda r: r.fulfill(status=200, content_type='application/javascript', body='window.PkbSDK = { init: () => new Promise(() => {}) };'))
+        elif blocked: pg.route('**/sdk/sdk.js', lambda r: r.abort())
         else: pg.route('**/sdk/sdk.js', lambda r: r.fulfill(status=200, content_type='application/javascript', body=MOCK))
-        pg.goto((ROOT / 'dist/pikabu/index.html').as_uri() + '?debug')
+        # Pikabu runs the game inside its own frame, so the test does too
+        host = ROOT / 'dist/pikabu-host.html'
+        host.write_text('<!doctype html><body style="margin:0"><iframe src="pikabu/index.html?debug" style="border:0;width:100vw;height:100vh"></iframe></body>')
+        pg.goto(host.as_uri()); pg.wait_for_timeout(500)
+        top = pg; pg = next(f for f in top.frames if f.url.endswith('index.html?debug'))
         pg.wait_for_function('window.__lumi && !document.getElementById("ov").hidden', timeout=20000)
         if pg.locator('[data-act=gift]').count(): pg.click('[data-act=gift]'); pg.wait_for_timeout(300)
         title = pg.inner_text('.title').replace('\n', ' / ')
         menu = pg.inner_text('#ov')
-        pg.screenshot(path=str(ROOT / f'test/pk-menu{"-blocked" if blocked else ""}.png'))
+        top.screenshot(path=str(ROOT / f'test/pk-menu-{blocked}.png'))
         pg.click('[data-act=endless]'); pg.wait_for_timeout(500)
         for _ in range(3):
             pg.evaluate('__lumi.aim(__lumi.plan()); __lumi.shoot()'); pg.wait_for_timeout(900)
@@ -47,6 +52,7 @@ with sync_playwright() as p:
             calls = pg.evaluate('__pk.calls')
             info['calls'] = sorted(set(c for c in calls))
             info['saved'] = bool(pg.evaluate("!!__pk.store['lumipop_save_v1']"))
-        print('BLOCKED' if blocked else 'SDK', info)
+        print({False: 'SDK', True: 'BLOCKED', 'hang': 'HANGING INIT'}[blocked], info)
         ctx.close()
+    host.unlink()
     b.close()
