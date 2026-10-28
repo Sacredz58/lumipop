@@ -79,30 +79,34 @@
     const sg = g.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.1, x, y, r);
     sg.addColorStop(0, hi); sg.addColorStop(0.42, base); sg.addColorStop(1, lo);
     g.fillStyle = sg; disc(g, x, y, r); g.fill();
+    styleOverlay(g, x, y, r, style, 1);
+    shade(g, x, y, r, style === 'candy');
+    glyph(g, GLYPH[ci], x, y, r, style === 'gem' ? 0.75 : 0.66);
+  }
+  /** the look of a shop skin, drawn over an orb (k scales the strength) */
+  function styleOverlay(g, x, y, r, style, k) {
     g.save(); disc(g, x, y, r); g.clip();
     if (style === 'candy') {
-      g.strokeStyle = 'rgba(255,255,255,.28)'; g.lineWidth = r * 0.2;
+      g.strokeStyle = `rgba(255,255,255,${0.28 * k})`; g.lineWidth = r * 0.2;
       for (let k = -2; k <= 2; k++) { g.beginPath(); g.moveTo(x - r + k * r * 0.62, y + r); g.lineTo(x + r * 0.2 + k * r * 0.62, y - r); g.stroke(); }
     } else if (style === 'gem') {
       const n = 8;
       for (let i = 0; i < n; i++) {
         const a0 = (i / n) * 6.2832 - 0.2, a1 = ((i + 1) / n) * 6.2832 - 0.2;
-        g.fillStyle = i % 2 ? 'rgba(255,255,255,.16)' : 'rgba(0,0,0,.16)';
+        g.fillStyle = i % 2 ? `rgba(255,255,255,${0.16 * k})` : `rgba(0,0,0,${0.16 * k})`;
         g.beginPath(); g.moveTo(x + Math.cos(a0) * r * 0.42, y + Math.sin(a0) * r * 0.42);
         g.lineTo(x + Math.cos(a0) * r * 1.05, y + Math.sin(a0) * r * 1.05); g.lineTo(x + Math.cos(a1) * r * 1.05, y + Math.sin(a1) * r * 1.05);
         g.lineTo(x + Math.cos(a1) * r * 0.42, y + Math.sin(a1) * r * 0.42); g.closePath(); g.fill();
       }
-      g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = r * 0.04; g.beginPath();
+      g.strokeStyle = `rgba(255,255,255,${0.35 * Math.min(1, k * 1.4)})`; g.lineWidth = r * 0.04; g.beginPath();
       for (let i = 0; i <= n; i++) { const a = (i / n) * 6.2832 - 0.2; g.lineTo(x + Math.cos(a) * r * 0.42, y + Math.sin(a) * r * 0.42); }
       g.stroke();
     } else if (style === 'planet') {
-      for (let k = 0; k < 5; k++) { g.fillStyle = k % 2 ? 'rgba(255,255,255,.14)' : 'rgba(0,0,0,.14)'; g.fillRect(x - r, y - r + k * r * 0.42 + Math.sin(k * 1.7) * r * 0.06, r * 2, r * 0.22); }
+      for (let b = 0; b < 5; b++) { g.fillStyle = b % 2 ? `rgba(255,255,255,${0.14 * k})` : `rgba(0,0,0,${0.14 * k})`; g.fillRect(x - r, y - r + b * r * 0.42 + Math.sin(b * 1.7) * r * 0.06, r * 2, r * 0.22); }
       const sh = g.createRadialGradient(x - r * 0.5, y - r * 0.5, r * 0.6, x - r * 0.2, y - r * 0.2, r * 1.6);
-      sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,20,.45)'); g.fillStyle = sh; g.fillRect(x - r, y - r, r * 2, r * 2);
+      sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, `rgba(0,0,20,${0.45 * k})`); g.fillStyle = sh; g.fillRect(x - r, y - r, r * 2, r * 2);
     }
     g.restore();
-    shade(g, x, y, r, style === 'candy');
-    glyph(g, GLYPH[ci], x, y, r, style === 'gem' ? 0.75 : 0.66);
   }
   function drawSpecial(g, code, x, y, r) {
     if (code === RAINBOW) {
@@ -163,25 +167,76 @@
     }
   }
   // painted orb sprites (vendor/orbs.png, 4x4 cells of 128 px, cell index = orb code; 13 = ice shell)
-  let ORB_IMG = null;
-  function loadOrbAtlas() {
-    if (!window.__ORBS__) return Promise.resolve();
+  let ORB_IMG = null, SKIN_IMG = null;
+  const SKIN_ROW = { candy: 0, gem: 1, planet: 2 };          // vendor/skins.png: row per skin, column = colour
+  function loadImage(src) {
+    if (!src) return Promise.resolve(null);
     return new Promise((res) => {
       const im = new Image();
-      im.onload = () => { ORB_IMG = im; res(); };
-      im.onerror = () => res();
-      im.src = window.__ORBS__;
+      im.onload = () => {
+        // a file:// page may treat an image as cross-origin: drawing it would taint every canvas
+        try { const c = document.createElement('canvas'); c.width = c.height = 1; c.getContext('2d').drawImage(im, 0, 0, 1, 1); c.toDataURL(); res(im); } catch (e) { res(null); }
+      };
+      im.onerror = () => res(null);                            // e.g. no WebP support: drawn orbs instead
+      im.src = src;
     });
+  }
+  async function loadOrbAtlas() {
+    [ORB_IMG, SKIN_IMG] = await Promise.all([loadImage(window.__ORBS__), loadImage(window.__SKINS__)]);
   }
   function atlasCell(g, idx, N, alpha) {
     g.globalAlpha = alpha || 1;
     g.drawImage(ORB_IMG, (idx % 4) * 128, Math.floor(idx / 4) * 128, 128, 128, 0, 0, N, N);
     g.globalAlpha = 1;
   }
+  const hex2rgb = (h) => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
+  function rgb2hsl(r, g, b) {
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2; let h = 0, s = 0;
+    if (mx !== mn) {
+      const d = mx - mn; s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+      h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h /= 6;
+    }
+    return [h, s, l];
+  }
+  function hsl2rgb(h, s, l) {
+    if (!s) return [l, l, l];
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+    const f = (t) => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+    return [f(h + 1 / 3), f(h), f(h - 1 / 3)];
+  }
+  const cellHue = [];
+  function paintedHue(ci) {                       // dominant hue of a painted orb (saturation-weighted circular mean)
+    if (cellHue[ci] !== undefined) return cellHue[ci];
+    const [, g] = canvas(48); atlasCell(g, ci, 48);
+    const d = g.getImageData(0, 0, 48, 48).data; let cx = 0, cy = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      const [h, s, l] = rgb2hsl(d[i] / 255, d[i + 1] / 255, d[i + 2] / 255), w = s * (1 - Math.abs(2 * l - 1)) * d[i + 3];
+      cx += Math.cos(h * 6.2832) * w; cy += Math.sin(h * 6.2832) * w;
+    }
+    return (cellHue[ci] = ((Math.atan2(cy, cx) / 6.2832) + 1) % 1);
+  }
+  const SKIN_TONE = { candy: { s: 1.12, l: 0.07, c: 0.95, k: 1.25 }, gem: { s: 1.25, l: -0.03, c: 1.18, k: 1.05 }, planet: { s: 0.82, l: 0, c: 1.05, k: 0.9 } };
+  function paintedSkin(g, ci, N, pal, style) {
+    atlasCell(g, ci, N);
+    const tone = SKIN_TONE[style] || SKIN_TONE.candy;
+    const dh = rgb2hsl(...hex2rgb(pal[ci][0]))[0] - paintedHue(ci);
+    const im = g.getImageData(0, 0, N, N), d = im.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (!d[i + 3]) continue;
+      let [h, s, l] = rgb2hsl(d[i] / 255, d[i + 1] / 255, d[i + 2] / 255);
+      if (s > 0.12) { h = (h + dh + 1) % 1; s = Math.min(1, s * tone.s); }
+      l = Math.max(0, Math.min(1, (l - 0.5) * tone.c + 0.5 + tone.l));
+      const [r, gg, b] = hsl2rgb(h, s, l); d[i] = r * 255; d[i + 1] = gg * 255; d[i + 2] = b * 255;
+    }
+    g.putImageData(im, 0, 0);
+    styleOverlay(g, N / 2, N / 2, N / 2 - 2, style, tone.k);
+  }
   function orbCanvas(code, pal, style, N) {
     N = N || 128; const [c, g] = canvas(N), x = N / 2, y = N / 2, r = N / 2 - 2;
     const st = style || STYLE;
     if (ORB_IMG && (code >= 6 || st === 'glow')) atlasCell(g, code, N);
+    else if (SKIN_IMG && code < 6 && SKIN_ROW[st] !== undefined) g.drawImage(SKIN_IMG, code * 128, SKIN_ROW[st] * 128, 128, 128, 0, 0, N, N);
+    else if (ORB_IMG && code < 6) paintedSkin(g, code, N, pal || PAL, st);
     else if (code < 6) drawColorOrb(g, code, x, y, r, pal || PAL, st); else drawSpecial(g, code, x, y, r);
     return c;
   }
@@ -334,7 +389,7 @@
     S.push(); st.pathDirty = true;
   }
   function resetRun() {
-    Object.assign(st, { score: 0, shown: 0, misses: 0, combo: 0, charge: 0, used: false, push: 0, pushT: 1, danger: 0, starsGot: 0, started: false, fire: null, xpScore: 0, xpLose: false });
+    Object.assign(st, { score: 0, shown: 0, misses: 0, combo: 0, charge: 0, used: false, push: 0, pushT: 1, danger: 0, starsGot: 0, started: false, fire: null, xpScore: 0, xpLose: false, boostUndo: null, runId: Date.now() });
   }
   function setupRun(gm, cfg) {
     st.gm = gm; st.lvl = cfg || null;
@@ -418,8 +473,12 @@
     ballL.addChild(o.body); haloL.addChild(o.halo);
     st.shot = { ...o, color, x: SHX, y: SHY, dx: Math.cos(st.aimA), dy: Math.sin(st.aimA), acc: 0, trail: 0 };
     if (color === FIRE) { st.fire = { popped: [], drops: [] }; S.fire(); } else S.shoot();
+    if (st.boostUndo && color === BOOST_CODE[st.boostUndo.id]) {   // the booster is spent only once it flies
+      st.boostUndo = null;
+      const doneQ = M.track('booster', 1); if (doneQ.length) emit('quest', doneQ);
+    }
     if (st.shots !== null) st.shots--;
-    loadAfterShot(); updateHud();
+    loadAfterShot(); updateHud(); updateBoosters();
     if (!st.tutorial) { st.tutorial = true; $('tip').hidden = true; }
   }
   function stepShot(dt) {
@@ -595,6 +654,7 @@
     if (st.gm === 'endless') {
       const rec = st.score > st.best && st.score > 0; if (rec) st.best = st.score;
       M.track('score', st.score);
+      M.recordRun(st.runId, st.score);
       const xp = M.addXp((st.score - st.xpScore) / 40); st.xpScore = st.score; save();
       later(() => emit('end', { type: 'over', score: st.score, best: st.best, record: rec, canContinue: !st.used, sparks: Math.min(80, Math.floor(st.score / 250)), xp }));
     } else {
@@ -876,6 +936,28 @@
   // ---- input -----------------------------------------------------------------
   function toUnit(e) { return [(e.clientX - fx0) / u, (e.clientY - fy0) / u]; }
   function clampAim(a) { return Math.max(-Math.PI + 0.2, Math.min(-0.2, a)); }
+  /** debug/recording helper: the aim angle that pops (and drops) the most for the current orb */
+  function planShot() {
+    const keep = st.aimA, k = st.current; let best = { a: keep, v: -1e9 };
+    for (let a = -Math.PI + 0.2; a <= -0.2; a += 0.008) {
+      st.aimA = a; const p = predict(); if (!p.cell) continue;
+      const [r, c] = p.cell, grp = new Set(), q = [];
+      for (const [rr, cc] of nbrs(r, c)) { const n = get(rr, cc); if (n && colored(n) && n.color === k && !grp.has(n)) { grp.add(n); q.push(n); } }
+      while (q.length) { const x = q.pop(); for (const [rr, cc] of nbrs(x.r, x.c)) { const n = get(rr, cc); if (n && colored(n) && n.color === k && !grp.has(n)) { grp.add(n); q.push(n); } } }
+      let v = grp.size * 0.6 - r * 0.05;
+      if (k >= 6 || grp.size >= 2) {
+        const seen = new Set(), qq = [];
+        for (let cc = 0; cc < COLS; cc++) { const b = get(0, cc); if (b && !grp.has(b)) { seen.add(b); qq.push(b); } }
+        while (qq.length) { const x = qq.pop(); for (const [rr, cc] of nbrs(x.r, x.c)) { const n = get(rr, cc); if (n && !seen.has(n) && !grp.has(n)) { seen.add(n); qq.push(n); } } }
+        let drops = 0; each((b) => { if (!grp.has(b) && !seen.has(b)) drops++; });
+        v = 10 + grp.size * 2 + drops * 3 - r * 0.05;
+      }
+      v += Math.random() * 0.3;
+      if (v > best.v) best = { a, v };
+    }
+    st.aimA = keep; st.pathDirty = true;
+    return best.a;
+  }
   function aimAt(ux, uy) {
     let dy = uy - SHY; const dx = ux - SHX; if (dy > -0.6) dy = -0.6;
     const a = clampAim(Math.atan2(dy, dx));
@@ -936,23 +1018,40 @@
   function useBooster(id) {
     if (st.mode !== 'play') return;
     if (st.shot) { toast(t('boosterBusy')); return; }
-    if (st.current === BOOST_CODE[id]) return;
+    const code = BOOST_CODE[id], u = st.boostUndo;
+    if (u && u.id === id && (st.current === code || st.next === code)) { cancelBooster(id); return; }
+    if (st.current === code) return;
+    if (u) cancelBooster(u.id);                      // switching boosters returns the first one
     if (!M.useBooster(id)) {
-      const price = M.price('boosters', id);
-      if (M.d.sparks >= price) { M.buyBooster(id); M.useBooster(id); }
-      else { toast(t('noSparks')); return; }
+      // none left: never spend sparks silently, ask first
+      st.mode = 'intro'; st.aiming = false; st.keyRot = 0; P.gameplayStop(); st.started = false;
+      emit('buyBooster', { id, price: M.price('boosters', id), img: previewCode(BOOST_CODE[id]) });
+      return;
     }
-    giveSpecial(BOOST_CODE[id]); firstInput();
-    const doneQ = M.track('booster', 1); if (doneQ.length) emit('quest', doneQ);
+    st.boostUndo = { id, cur: st.current, nxt: st.next };
+    giveSpecial(code); firstInput();
+    updateBoosters(); save();
+  }
+  /** tap the active booster again: it goes back to the stock and the shooter gets its orb back */
+  function cancelBooster(id) {
+    const code = BOOST_CODE[id], u = st.boostUndo;
+    if (st.current === code) { st.current = st.next < 6 ? st.next : pickPresent(); st.next = u && u.nxt < 6 ? u.nxt : pickPresent(); }
+    else if (st.next === code) st.next = u && u.nxt < 6 ? u.nxt : pickPresent();
+    st.boostUndo = null;
+    M.d.inv[id] = (M.d.inv[id] || 0) + 1; M.changed();
+    cur.k = 0.35; refreshShooter(false); st.pathDirty = true; S.click();
     updateBoosters(); save();
   }
   function updateBoosters() {
     for (const id of ['fire', 'bolt', 'rainbow']) {
       const n = M.d.inv[id] || 0, el = $('bst-' + id);
       if (!el) continue;
-      el.querySelector('.cnt').textContent = n > 0 ? String(n) : '+';
-      el.classList.toggle('empty', n <= 0);
-      el.setAttribute('aria-label', `${t('b_' + id)}: ${n}`);
+      const on = !!(st.boostUndo && st.boostUndo.id === id);
+      el.querySelector('.cnt').textContent = on ? '×' : n > 0 ? String(n) : '+';
+      el.classList.toggle('empty', n <= 0 && !on);
+      el.classList.toggle('on', on);
+      el.setAttribute('aria-pressed', on ? 'true' : 'false');
+      el.setAttribute('aria-label', on ? `${t('b_' + id)}: ${t('cancel')}` : `${t('b_' + id)}: ${n}`);
     }
   }
   async function rainbowAd() {
@@ -1076,9 +1175,12 @@
     flies.forEach((f, i) => { f.s.tint = BG.flies[i % 4]; });
     drawBackground();
   }
+  const previewCache = {};
   function previewOrb(skinId, ci) {
+    const key = skinId + ci;
+    if (previewCache[key]) return previewCache[key];
     const sk = SKINS[skinId] || SKINS.lumi;
-    return orbCanvas(ci, sk.pal, sk.style, 96).toDataURL();
+    return (previewCache[key] = orbCanvas(ci, sk.pal, sk.style, 96).toDataURL());
   }
   function previewCode(code) { return orbCanvas(code, PAL, STYLE, 96).toDataURL(); }
   const bgSwatch = (id) => { const b = BGS[id] || BGS.night; return `linear-gradient(180deg, ${b.stops[0]}, ${b.stops[1]} 55%, ${b.stops[2]})`; };
@@ -1101,6 +1203,7 @@
     const saved = await P.load();
     const sv = saved && (saved.v === 2 || saved.v === 1) ? saved : null;
     M.load(sv && sv.meta); M.save = save;
+    if (M.d.lang === 'ru' || M.d.lang === 'en') I.set(M.d.lang);   // the player's own choice beats the platform default
     await loadOrbAtlas();
     const sk = SKINS[M.d.orb] || SKINS.lumi; PAL = sk.pal; STYLE = sk.style; BG = BGS[M.d.bg] || BGS.night; computeTint();
     buildTextures();
@@ -1151,11 +1254,14 @@
     emit('ready', {});
     P.ready();
 
+    let __t = 0;
     if (/[?&]debug\b/.test(location.search)) {
       window.__lumi = { st, M, aim: (a) => { st.aimA = clampAim(a); st.pathDirty = true; st.aimVisible = true; }, shoot, swap, layout, lowestRow, countBalls,
         music: () => ({ on: S.musicOn }), give: (c) => giveSpecial(c), codes: { RAINBOW, NOVA, STONE, BOMB, STAR, FIRE, BOLT },
         setRows: (rows) => { loadRows(rows, false); st.pathDirty = true; fixColors(); },
-        setScore: (s) => { st.score = s; updateHud(true); }, fill: (rows) => { for (let i = 0; i < rows; i++) pushRows(1); st.pushT = 1; st.push = 0; } };
+        setScore: (s) => { st.score = s; updateHud(true); }, plan: planShot,
+        /** frame-exact capture: stop the ticker, then step(ms) advances the game and renders */
+        manual: () => { app.ticker.stop(); __t = performance.now(); }, step: (ms) => { __t += ms; app.ticker.update(__t); }, fill: (rows) => { for (let i = 0; i < rows; i++) pushRows(1); st.pushT = 1; st.push = 0; } };
     }
   }
 

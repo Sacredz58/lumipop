@@ -15,6 +15,7 @@ SDK = {
     'crazygames': '<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>',
     'poki': '<script src="https://game-cdn.poki.com/scripts/v2/poki-sdk.js"></script>',
     'vk': '<script src="https://unpkg.com/@vkontakte/vk-bridge@2.15.2/dist/browser.min.js"></script>',
+    'pikabu': '<script src="https://games.pikabu.ru/sdk/sdk.js"></script>',
 }
 PIXI_CDN = 'https://cdn.jsdelivr.net/npm/pixi.js@8.6.6/dist/pixi.min.js'
 
@@ -24,11 +25,29 @@ def read(*p):
         return f.read()
 
 
-def game_js(orbs='orbs.png'):
+def webp_data_uri(name):
+    """vendor/<name>.png as an inlined WebP data URI (5x lighter than PNG; works from file:// too)."""
+    path = os.path.join(VENDOR, name + '.png')
+    if not os.path.exists(path):
+        return ''
+    from PIL import Image
+    import io
+    buf = io.BytesIO()
+    Image.open(path).convert('RGBA').save(buf, 'WEBP', quality=92, method=6, alpha_quality=100)
+    return 'data:image/webp;base64,' + base64.b64encode(buf.getvalue()).decode()
+
+
+_URI = {}
+def game_js(orbs=None):
+    if 'orbs' not in _URI:
+        _URI['orbs'], _URI['skins'] = webp_data_uri('orbs'), webp_data_uri('skins')
+    orbs = orbs if orbs is not None else _URI['orbs']
     music = os.path.join(VENDOR, 'music.json')
     head = f'window.__MUSIC__ = {read(music).strip()};\n' if os.path.exists(music) else ''
-    if os.path.exists(os.path.join(VENDOR, 'orbs.png')):
+    if orbs:
         head += f'window.__ORBS__ = "{orbs}";\n'
+    if _URI['skins']:
+        head += f'window.__SKINS__ = "{_URI["skins"]}";\n'
     return head + '\n'.join(read(SRC, n) for n in ('platform.js', 'audio.js', 'i18n.js', 'levels.js', 'meta.js', 'game.js', 'menus.js'))
 
 
@@ -47,8 +66,6 @@ def build_target(name):
         f.write(game_js())
     shutil.copy(os.path.join(VENDOR, 'pixi.min.js'), out)
     shutil.copy(os.path.join(VENDOR, 'lumi.woff'), out)
-    if os.path.exists(os.path.join(VENDOR, 'orbs.png')):
-        shutil.copy(os.path.join(VENDOR, 'orbs.png'), out)
     if os.path.exists(os.path.join(VENDOR, 'music.mp3')):
         shutil.copy(os.path.join(VENDOR, 'music.mp3'), out)
     z = os.path.join(DIST, f'lumipop-{name}.zip')
@@ -71,8 +88,7 @@ def build_artifact():
     body = re.search(r'<body>(.*)</body>', html, re.S).group(1)
     head = re.sub(r'<meta[^>]*>\s*', '', head).replace('<!--SDK-->', '<script>window.__TARGET__="web"</script>')
     body = body.replace('<!--PIXI-->', f'<script src="{PIXI_CDN}"></script>')
-    orbs = 'data:image/png;base64,' + base64.b64encode(open(os.path.join(VENDOR, 'orbs.png'), 'rb').read()).decode() if os.path.exists(os.path.join(VENDOR, 'orbs.png')) else ''
-    body = body.replace('<!--GAME-->', '<script>\n' + game_js(orbs) + '\n</script>')
+    body = body.replace('<!--GAME-->', '<script>\n' + game_js() + '\n</script>')
     with open(os.path.join(DIST, 'lumipop-artifact.html'), 'w', encoding='utf-8') as f:
         f.write(head.strip() + '\n' + body.strip() + '\n')
     if os.path.exists(os.path.join(VENDOR, 'music.mp3')):
@@ -81,12 +97,17 @@ def build_artifact():
 
 
 def publish_builds():
-    """Copy the storefront archives into build/, which is kept in git."""
+    """Copy the storefront archives into build/, which is kept in git, and the Pikabu build into
+    docs/pikabu/ — Pikabu takes a link, not an upload, so GitHub Pages (main, /docs) hosts it."""
     out = os.path.join(ROOT, 'build')
     os.makedirs(out, exist_ok=True)
-    for t in ('yandex', 'vk', 'crazygames', 'poki'):
+    for t in ('yandex', 'vk', 'crazygames', 'poki', 'pikabu'):
         shutil.copy(os.path.join(DIST, f'lumipop-{t}.zip'), out)
-    print('build/ updated')
+    pages = os.path.join(ROOT, 'docs', 'pikabu')
+    shutil.rmtree(pages, ignore_errors=True)
+    shutil.copytree(os.path.join(DIST, 'pikabu'), pages)
+    open(os.path.join(ROOT, 'docs', '.nojekyll'), 'w').close()
+    print('build/ and docs/pikabu/ updated')
 
 
 if __name__ == '__main__':

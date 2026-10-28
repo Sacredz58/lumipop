@@ -25,7 +25,7 @@
     sparks: 50, inv: { fire: 1, bolt: 1, rainbow: 1 }, owned: ['lumi', 'night'], orb: 'lumi', bg: 'night',
     levels: {}, daily: { key: '', best: 0, rewarded: false },
     quests: { key: '', list: [] }, streak: { last: '', day: 0, claimed: '' }, records: [], seen: {},
-    plevel: 1, xp: 0, chestAt: 0, cons: 0, games: 0, shortcut: false, reviewed: false,
+    plevel: 1, xp: 0, chestAt: 0, cons: 0, games: 0, shortcut: false, reviewed: false, lang: '',
   });
   const CHEST_MS = 4 * 3600 * 1000;
   // constellations light up with adventure stars (60 levels x 3 = 180)
@@ -138,9 +138,14 @@
     },
     endlessResult(score) {
       const r = Math.min(80, Math.floor(score / 250));
-      M.d.sparks += r;
-      if (score > 0) { M.d.records.push({ s: score, d: today() }); M.d.records.sort((a, b) => b.s - a.s); M.d.records = M.d.records.slice(0, 10); }
-      M.changed(); return r;
+      M.d.sparks += r; M.changed(); return r;
+    },
+    /** write an endless run into the top 10 right when it ends; a continued run updates its own entry */
+    recordRun(id, score) {
+      if (!(score > 0)) return;
+      const e = M.d.records.find((x) => x.id === id);
+      if (e) e.s = Math.max(e.s, score); else M.d.records.push({ id, s: score, d: today() });
+      M.d.records.sort((a, b) => b.s - a.s); M.d.records = M.d.records.slice(0, 10); M.changed();
     },
     // ---- player level ----
     xpNeed, levelReward,

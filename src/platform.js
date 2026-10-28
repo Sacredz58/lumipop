@@ -1,6 +1,6 @@
 /* Lumi Pop — platform adapter.
  * One game build, several storefronts. The build script sets window.__TARGET__
- * to one of: "web" | "yandex" | "crazygames" | "poki" | "vk".
+ * to one of: "web" | "yandex" | "crazygames" | "poki" | "vk" | "pikabu".
  * The game only talks to this object, never to an SDK directly.
  */
 (function () {
@@ -26,9 +26,12 @@
 
   const P = {
     target: TARGET,
-    lang: pickLang(navigator.language),
+    // CrazyGames and Poki require English by default, Pikabu requires Russian; Yandex and VK pick the language from their SDK
+    lang: TARGET === 'crazygames' || TARGET === 'poki' ? 'en' : TARGET === 'pikabu' ? 'ru' : pickLang(navigator.language),
+    // Pikabu forbids foreign words in the title, so the game carries a Russian name there
+    title: TARGET === 'pikabu' ? { main: 'Люми', sub: 'звёздные шарики', hud: 'ЛЮМИ' } : { main: 'Lumi Pop', sub: '', hud: 'LUMI POP' },
     hasRewarded: true,
-    _ysdk: null, _player: null, _cg: null, _vk: null,
+    _ysdk: null, _player: null, _cg: null, _vk: null, _pk: null, _flushAt: 0,
     _inGameplay: false,
     _lastInterstitial: Date.now(),
     _saveTimer: 0,
@@ -50,6 +53,9 @@
           try { this._cg.game.loadingStart(); } catch (e) {}
         } else if (TARGET === 'poki' && window.PokiSDK) {
           await window.PokiSDK.init().catch(() => {});
+        } else if (TARGET === 'pikabu' && window.PkbSDK) {
+          this._pk = await window.PkbSDK.init();
+          try { this.hasRewarded = !!this._pk.ads.rewarded.isSupported; } catch (e) {}
         } else if (TARGET === 'vk' && window.vkBridge) {
           this._vk = window.vkBridge;
           await this._vk.send('VKWebAppInit').catch(() => {});
@@ -71,6 +77,7 @@
         if (this._ysdk) this._ysdk.features.LoadingAPI && this._ysdk.features.LoadingAPI.ready();
         if (this._cg) this._cg.game.loadingStop();
         if (TARGET === 'poki' && window.PokiSDK) window.PokiSDK.gameLoadingFinished();
+        if (this._pk) this._pk.gameStarted();
       } catch (e) {}
     },
 
@@ -97,7 +104,7 @@
     /** Full-screen ad in a logical pause. Resolves when the game may continue. */
     async interstitial(mute) {
       const now = Date.now();
-      if (now - this._lastInterstitial < 60000) return;
+      if (now - this._lastInterstitial < (this._pk ? 120000 : 60000)) return;   // Pikabu allows one per 120 s
       this._lastInterstitial = now;
       try {
         if (this._ysdk) {
@@ -115,6 +122,12 @@
           mute(true);
           await this._vk.send('VKWebAppShowNativeAds', { ad_format: 'interstitial' }).catch(() => {});
           mute(false);
+        } else if (this._pk) {
+          if (!this._pk.ads.fullscreen.isSupported || !(await this._pk.ads.fullscreen.canShow())) return;
+          mute(true);
+          const r = await this._pk.ads.fullscreen.show();
+          mute(false);
+          if (!r || !r.rendered) console.warn('[platform] fullscreen ad not shown', r && r.reason);
         }
       } catch (e) { mute(false); }
     },
@@ -142,9 +155,14 @@
           const r = await this._vk.send('VKWebAppShowNativeAds', { ad_format: 'reward' }).catch(() => null);
           mute(false);
           return !!(r && r.result);
+        } else if (this._pk) {
+          mute(true);
+          const r = await this._pk.ads.rewarded.show();
+          mute(false);
+          return !!(r && r.reward);           // false when closed early or blocked by an ad blocker
         }
-        // web demo: no ad network — the game shows a labelled stand-in
-        return 'demo';
+        // web demo: no ad network — the game shows a labelled stand-in; elsewhere (SDK blocked) no reward
+        return TARGET === 'web' ? 'demo' : false;
       } catch (e) { mute(false); return false; }
     },
 
@@ -207,6 +225,7 @@
       try {
         if (this._player) data = await this._player.getData(['save']).then((d) => d && d.save);
         else if (this._cg) { const s = this._cg.data.getItem(SAVE_KEY); data = s ? JSON.parse(s) : null; }
+        else if (this._pk) data = this._pk.storage.get(SAVE_KEY) || null;
         else if (this._vk) {
           // VK keeps at most 4096 bytes per key, so the save is split into chunks
           const head = await this._vk.send('VKWebAppStorageGet', { keys: [SAVE_KEY + '_n'] });
@@ -230,7 +249,11 @@
         try {
           if (this._player) this._player.setData({ save: obj }, false).catch(() => {});
           else if (this._cg) this._cg.data.setItem(SAVE_KEY, JSON.stringify(obj));
-          else if (this._vk) {
+          else if (this._pk) {
+            // set() is local and synced by the SDK; an explicit flush at most every 20 s (limit: 100 per 5 min)
+            this._pk.storage.set(SAVE_KEY, obj);
+            if (Date.now() - this._flushAt > 20000) { this._flushAt = Date.now(); this._pk.storage.flush().catch(() => {}); }
+          } else if (this._vk) {
             const s = JSON.stringify(obj), parts = [];
             for (let i = 0; i < s.length; i += 1000) parts.push(s.slice(i, i + 1000));
             parts.forEach((v, i) => this._vk.send('VKWebAppStorageSet', { key: SAVE_KEY + '_' + i, value: v }).catch(() => {}));

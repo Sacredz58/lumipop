@@ -7,6 +7,7 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   const ICON = {
+    globe: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.5 5.7 3.5 9s-1 6.3-3.5 9c-2.5-2.7-3.5-5.7-3.5-9s1-6.3 3.5-9z"/></svg>',
     spark: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 1.5l2.6 7.9 7.9 2.6-7.9 2.6L12 22.5l-2.6-7.9L1.5 12l7.9-2.6z"/></svg>',
     star: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.5l2.9 6.2 6.8.8-5 4.6 1.3 6.7L12 17.4l-6 3.4 1.3-6.7-5-4.6 6.8-.8z"/></svg>',
     lock: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
@@ -39,6 +40,8 @@
     return parts.join(' ');
   }
   const hm = (ms) => { const m = Math.ceil(ms / 60000), h = Math.floor(m / 60); return h ? `${h}:${String(m % 60).padStart(2, '0')}` : `${m} ${I.L === I.ru ? 'мин' : 'min'}`; };
+  const isRu = () => I.L === I.ru;
+  const langBtn = () => `<button class="langb" data-act="lang" aria-label="${isRu() ? 'Switch to English' : 'Переключить на русский'}">${ICON.globe}<b>${isRu() ? 'RU' : 'EN'}</b></button>`;
   const levelPill = () => `<div class="lvpill">${t('plevel', { n: M.d.plevel })}<span class="mb"><i style="width:${Math.round((M.d.xp / M.xpNeed(M.d.plevel)) * 100)}%"></i></span></div>`;
   function xpBlock(x) {
     if (!x) return '';
@@ -75,8 +78,8 @@
     }
     show('main', `
       <div class="orbs">${img(G.previewCode(1))}${img(G.previewCode(4), 'l')}${img(G.previewCode(3))}</div>
-      <div class="title">Lumi Pop</div>
-      <div class="top2">${wallet()}${levelPill()}</div>
+      <div class="title">${esc(P.title.main)}${P.title.sub ? `<small>${esc(P.title.sub)}</small>` : ''}</div>
+      <div class="top2">${wallet()}${levelPill()}${langBtn()}</div>
       ${cont}
       <div id="scSlot"></div>
       <button class="tile" data-act="endless" ${sv ? '' : 'data-focus'}>${img(G.previewCode(4))}<span><b>${t('endless')}</b><small>${G.st.best ? `${t('best')}: ${fmt(G.st.best)}` : t('endlessSub')}</small></span><span class="chev">›</span></button>
@@ -238,6 +241,17 @@
       setTimeout(() => P.requestReview().then((sent) => { if (sent) { M.d.reviewed = true; M.save(); } }), 1400);
     }
   }
+  function buyBoosterCard(d) {
+    const can = M.d.sparks >= d.price;
+    show('buyB', `
+      <div class="eyebrow">${t('noBoosters')}</div>
+      ${img(d.img, 'sp')}
+      <div class="h2">${t('b_' + d.id)}</div>
+      <div class="sub">${t('b_' + d.id + 'D')}</div>
+      ${btn('buyUseB', `${t('buyUse', { n: '' })}${ICON.spark} ${d.price}`, 'primary', `data-id="${d.id}" ${can ? 'data-focus' : 'disabled'}`)}
+      <div class="sub">${can ? t('haveSparks', { n: ICON.spark + ' ' + fmt(M.d.sparks) }) : t('noSparks')}</div>
+      ${btn('cancelB', t('cancel'), 'ghost', can ? '' : 'data-focus')}`);
+  }
   function introCard(d) {
     show('special', `
       <div class="eyebrow">${t('newSpecial')}</div>
@@ -297,14 +311,22 @@
   // ---- records -------------------------------------------------------------------
   async function recordsScreen(tab) {
     tab = tab || 'mine';
-    const tabs = `<div class="tabs">${['world', 'mine'].map((k) => `<button class="${tab === k ? 'on' : ''}" data-act="recTab" data-tab="${k}">${t(k)}</button>`).join('')}</div>`;
+    // no world board outside Yandex: show only the player's own records, never name another storefront
+    if (!P.hasLeaderboard()) tab = 'mine';
+    const tabs = !P.hasLeaderboard() ? '' : `<div class="tabs">${['world', 'mine'].map((k) => `<button class="${tab === k ? 'on' : ''}" data-act="recTab" data-tab="${k}">${t(k)}</button>`).join('')}</div>`;
     const frame = (body) => show('records', `<div class="eyebrow">${t('records').toUpperCase()}</div>${tabs}<div class="list">${body}</div>${btn('main', t('back'))}`, 'wide');
     if (tab === 'mine') {
-      const r = M.d.records;
-      frame(r.length ? r.map((x, i) => `<div class="rec"><span>${i + 1}</span><span class="nm">${esc(x.d)}</span><b>${fmt(x.s)}</b></div>`).join('') : `<div class="sub" style="margin:auto">${t('noRecords')}</div>`);
+      const r = M.d.records, best = Math.max(G.st.best || 0, r.length ? r[0].s : 0);
+      const lvl = Math.min(M.nextLevel(), LV.TOTAL);
+      const sum = `
+        <div class="rec"><span class="nm">${t('recBest')}</span><b>${best ? fmt(best) : t('recNone')}</b></div>
+        <div class="rec"><span class="nm">${t('recDaily')}</span><b>${M.d.daily.best ? fmt(M.d.daily.best) : t('recNone')}</b></div>
+        <div class="rec"><span class="nm">${t('recAdv')}</span><b>${t('recAdvV', { n: lvl, s: ICON.star + ' ' + M.totalStars() })}</b></div>`;
+      const runs = r.length ? `<div class="eyebrow" style="margin-top:6px">${t('recRuns')}</div>` + r.map((x, i) => `<div class="rec"><span>${i + 1}</span><span class="nm">${esc(x.d)}</span><b>${fmt(x.s)}</b></div>`).join('')
+        : `<div class="sub" style="margin:4px auto 0">${t('noRecords')}</div>`;
+      frame(sum + runs);
       return;
     }
-    if (!P.hasLeaderboard()) { frame(`<div class="sub" style="margin:auto">${t('worldNone')}</div>`); return; }
     frame('<div class="sub" style="margin:auto">…</div>');
     const top = await P.getTop();
     if (screen !== 'records') return;
@@ -332,6 +354,8 @@
         G.st.mode = 'over'; G.finalizeEndless(); await interstitial(); G.start(gm, n); break;
       }
       case 'introOk': hide(); G.introDone(); break;
+      case 'buyUseB': if (M.buyBooster(d.id)) { S.coin(); hide(); G.introDone(); G.useBooster(d.id); } break;
+      case 'cancelB': hide(); G.introDone(); break;
       case 'gift': { const g = M.claimGift(); if (g) S.coin(); hide(); mainMenu(); break; }
       case 'quests': questsScreen(); break;
       case 'claimQ': { const r = M.claimQuest(+d.i); if (r) S.coin(); questsScreen(); break; }
@@ -346,6 +370,7 @@
       case 'chestAd': { const ok = await G.reward(); if (ok) { const r = M.openChest(); S.coin(); chestCard(r); } break; }
       case 'cons': consScreen('adventure'); break;
       case 'shortcut': { const ok = await P.shortcut(); if (ok && !M.d.shortcut) { M.d.shortcut = true; M.grant({ sparks: 50 }); M.changed(); S.coin(); G.toast('+50'); } mainMenu(); break; }
+      case 'lang': M.d.lang = isRu() ? 'en' : 'ru'; I.set(M.d.lang); applyLang(); G.updateBoosters(); M.changed(); mainMenu(); break;
       case 'recTab': recordsScreen(d.tab); break;
       case 'login': await P.login(); recordsScreen('world'); break;
     }
@@ -359,6 +384,7 @@
   function setMusicIcon() { const on = S.musicOn; $('mcross').style.display = on ? 'none' : ''; $('bMusic').setAttribute('aria-pressed', on ? 'true' : 'false'); }
   function setSoundIcon() { const m = S.muted; $('wave').style.display = m ? 'none' : ''; $('cross').style.display = m ? '' : 'none'; $('bSound').setAttribute('aria-pressed', m ? 'true' : 'false'); }
   function applyLang() {
+    document.querySelectorAll('.brand').forEach((el) => { el.textContent = P.title.hud; }); document.title = P.title.sub ? `${P.title.main}: ${P.title.sub}` : P.title.main;
     document.querySelectorAll('[data-t]').forEach((el) => { el.textContent = t(el.getAttribute('data-t')); });
     $('tip').textContent = t('tip'); $('keys').innerHTML = t('keys') + '<br>1 2 3 — ' + t('tabBoost').toLowerCase();
     $('bSound').setAttribute('aria-label', t('sound')); $('bPause').setAttribute('aria-label', t('pause')); $('bMusic').setAttribute('aria-label', t('music'));
@@ -379,6 +405,7 @@
   G.on('pause', pauseCard);
   G.on('end', (d) => { endCard(d); afterEnd(d); });
   G.on('intro', introCard);
+  G.on('buyBooster', buyBoosterCard);
   G.on('quest', (list) => { S.coin(); G.toast(list.map((q) => '✓ ' + t('q_' + q.id, { n: q.id === 'score' ? fmt(q.n) : q.n })).join('\n')); });
   M.on(() => { if (screen === 'main' || screen === 'shop' || screen === 'quests') { const w = ov.querySelector('.wallet b'); if (w) w.textContent = fmt(M.d.sparks); } G.updateBoosters(); });
 })();

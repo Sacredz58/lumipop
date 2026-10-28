@@ -50,6 +50,8 @@ body.land #hudSub{font-size:14px;white-space:normal}
 .bst .cnt{position:absolute;right:-6px;top:-6px;min-width:22px;height:22px;padding:0 5px;box-sizing:border-box;border-radius:11px;background:var(--gold);color:var(--gold-ink);font-size:12px;display:grid;place-items:center}
 .bst.empty img{opacity:.45}
 .bst.empty .cnt{background:#5a4fa0;color:var(--ink)}
+.bst.on{border-color:var(--gold);box-shadow:0 0 0 3px rgba(255,204,77,.25),0 0 18px rgba(255,204,77,.35)}
+.bst.on .cnt{background:var(--ink);color:var(--gold-ink);font-size:14px}
 .bst:active{transform:scale(.94)}
 
 .ov{position:fixed;inset:0;display:grid;place-items:center;background:rgba(6,5,20,.62);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);z-index:20;padding:16px;box-sizing:border-box;overflow:auto}
@@ -60,6 +62,7 @@ body.land #hudSub{font-size:14px;white-space:normal}
 .eyebrow{font-size:12px;letter-spacing:.2em;color:var(--gold)}
 .big{font-size:54px;line-height:1;font-variant-numeric:tabular-nums}
 .title{font-size:46px;line-height:1;letter-spacing:.02em}
+.title small{display:block;font-size:17px;letter-spacing:.08em;color:var(--gold);margin-top:6px;text-transform:uppercase}
 .h2{font-size:24px;line-height:1.15}
 .sub{font-size:14px;color:var(--mute);line-height:1.4;max-width:30ch}
 .orbs{display:flex;gap:10px;align-items:center;margin:4px 0 2px}
@@ -128,6 +131,8 @@ body.land #hudSub{font-size:14px;white-space:normal}
 .lvpill{display:inline-flex;align-items:center;gap:8px;font-size:14px;background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:6px 12px}
 .lvpill .mb{width:54px;height:5px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden}.lvpill .mb i{display:block;height:100%;background:var(--gold)}
 .top2{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.langb{display:inline-flex;align-items:center;gap:6px;font-size:14px;background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:6px 12px;color:var(--mute);cursor:pointer}
+.langb b{color:var(--ink);letter-spacing:.5px}.langb:hover{border-color:rgba(255,255,255,.35)}
 .row4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%}
 .sq small{font-size:10px;color:var(--mute);margin-top:-3px}
 .sq.hot{border-color:var(--gold);color:var(--gold)}

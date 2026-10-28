@@ -1,0 +1,26 @@
+from playwright.sync_api import sync_playwright
+S = "({cur:__lumi.st.current, nxt:__lumi.st.next, inv:{...__lumi.M.d.inv}, on:[...document.querySelectorAll('.bst.on')].map(e=>e.id), badge:document.querySelector('#bst-fire .cnt').textContent})"
+with sync_playwright() as p:
+    b = p.chromium.launch(args=['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
+    pg = b.new_page(viewport={'width':390,'height':844}, locale='ru-RU'); errs=[]
+    pg.on('pageerror', lambda e: errs.append(str(e)))
+    pg.goto('http://127.0.0.1:8766/web/index.html?debug')
+    pg.wait_for_function('window.__lumi && !document.getElementById("ov").hidden')
+    if pg.locator('[data-act=gift]').count(): pg.click('[data-act=gift]')
+    pg.click('[data-act=endless]'); pg.wait_for_timeout(300)
+    pg.evaluate("__lumi.M.d.inv={fire:1,bolt:1,rainbow:1}; __lumi.st.current=0; __lumi.st.next=1; __lumi.M.changed()")
+    print('start            ', pg.evaluate(S))
+    pg.keyboard.press('Digit1'); pg.wait_for_timeout(150); print('1: fire on       ', pg.evaluate(S))
+    pg.screenshot(path='test/boost-on.png')
+    pg.keyboard.press('Digit1'); pg.wait_for_timeout(150); print('1 again: cancel  ', pg.evaluate(S))
+    pg.click('#bst-fire'); pg.click('#bst-bolt'); pg.wait_for_timeout(150); print('fire then bolt   ', pg.evaluate(S))
+    pg.click('#bst-bolt'); pg.wait_for_timeout(150); print('bolt again cancel', pg.evaluate(S))
+    pg.keyboard.press('Digit1'); pg.keyboard.press('KeyX'); pg.wait_for_timeout(150); print('fire + swap      ', pg.evaluate(S))
+    pg.keyboard.press('Digit1'); pg.wait_for_timeout(150); print('cancel from next ', pg.evaluate(S))
+    q0 = pg.evaluate("__lumi.M.d.quests.list.map(q=>q.id+':'+q.prog).join(',')")
+    pg.keyboard.press('Digit1'); pg.evaluate('__lumi.aim(-1.5)'); pg.evaluate('__lumi.shoot()'); pg.wait_for_timeout(2500)
+    print('fired fire       ', pg.evaluate(S), '| boostUndo', pg.evaluate('__lumi.st.boostUndo'))
+    pg.evaluate("__lumi.give(__lumi.codes.RAINBOW); __lumi.st.boostUndo=null"); inv=pg.evaluate('__lumi.M.d.inv.rainbow')
+    pg.keyboard.press('Digit3'); pg.wait_for_timeout(150)
+    print('ad rainbow + key3: inv unchanged', inv == pg.evaluate('__lumi.M.d.inv.rainbow'), '| cur', pg.evaluate('__lumi.st.current'))
+    print('errors', errs or 'none'); b.close()
