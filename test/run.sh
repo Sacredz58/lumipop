@@ -15,5 +15,6 @@ python3 test/skins.py    # painted skin atlases in field and shop
 python3 test/lang.py     # language toggle (EN by default on CrazyGames)
 python3 test/cgrec.py    # CrazyGames records: no world tab, no other portal names
 python3 test/pikabu.py   # Pikabu: Russian name and language, PkbSDK saves and ads, works with the SDK blocked
+python3 test/ads.py      # fullscreen at level/menu breaks, capped at one per 120 s
 python3 test/music.py  # renders 66 s of music offline -> test/music.raw
 echo "ALL TESTS FINISHED"

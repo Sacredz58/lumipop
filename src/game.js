@@ -1064,6 +1064,7 @@
   function mute(on) { st.adActive = on; S.systemPause(on); }
   async function reward() {
     st.aiming = false;
+    if (!(await P.canRewarded())) { toast(t('adFail')); return false; }   // no empty ad requests
     let r = await P.rewarded(mute);
     if (r === 'demo') r = await demoAd();
     if (!r) toast(t('adFail'));

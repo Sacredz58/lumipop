@@ -61,6 +61,10 @@ window.__SKINS__ = "data:image/webp;base64,UklGRvANAgBXRUJQVlA4WAoAAAAQAAAA/wIAf
           // outside Pikabu (a plain link, no test environment) init never settles: don't let it hold the game
           this._pk = await within(window.PkbSDK.init(), 5000);
           try { this.hasRewarded = !!this._pk.ads.rewarded.isSupported; } catch (e) {}
+          // preloader ad: mobile only, while the game loads; gameStarted() waits for it (see ready())
+          this._preloader = (async () => {
+            try { const pl = this._pk.ads.preloader; if (pl.isSupported && await pl.canShow()) await within(pl.show(), 60000); } catch (e) {}
+          })();
         } else if (TARGET === 'vk' && window.vkBridge && window.parent !== window) {   // outside VK's frame there is nobody to answer
           await within(window.vkBridge.send('VKWebAppInit'), 5000);
           this._vk = window.vkBridge;
@@ -82,7 +86,7 @@ window.__SKINS__ = "data:image/webp;base64,UklGRvANAgBXRUJQVlA4WAoAAAAQAAAA/wIAf
         if (this._ysdk) this._ysdk.features.LoadingAPI && this._ysdk.features.LoadingAPI.ready();
         if (this._cg) this._cg.game.loadingStop();
         if (TARGET === 'poki' && window.PokiSDK) window.PokiSDK.gameLoadingFinished();
-        if (this._pk) this._pk.gameStarted();
+        if (this._pk) Promise.resolve(this._preloader).then(() => { try { this._pk.gameStarted(); } catch (e) {} });
       } catch (e) {}
     },
 
@@ -135,6 +139,16 @@ window.__SKINS__ = "data:image/webp;base64,UklGRvANAgBXRUJQVlA4WAoAAAAQAAAA/wIAf
           if (!r || !r.rendered) console.warn('[platform] fullscreen ad not shown', r && r.reason);
         }
       } catch (e) { mute(false); }
+    },
+
+    /** Is a rewarded video likely to be there right now? Buttons that promise one hide when it is not. */
+    async canRewarded() {
+      try {
+        if (TARGET === 'web') return true;                       // demo stand-in
+        if (this._pk) return this._pk.ads.rewarded.isSupported && await within(this._pk.ads.rewarded.canShow(), 3000);
+        if (this._vk) { const r = await within(this._vk.send('VKWebAppCheckNativeAds', { ad_format: 'reward' }), 3000); return !!(r && r.result); }
+        return !!(this._ysdk || this._cg || (TARGET === 'poki' && window.PokiSDK));
+      } catch (e) { return false; }
     },
 
     /** Rewarded video. Resolves true only if the reward was earned. */
@@ -2058,6 +2072,7 @@ window.__SKINS__ = "data:image/webp;base64,UklGRvANAgBXRUJQVlA4WAoAAAAQAAAA/wIAf
   function mute(on) { st.adActive = on; S.systemPause(on); }
   async function reward() {
     st.aiming = false;
+    if (!(await P.canRewarded())) { toast(t('adFail')); return false; }   // no empty ad requests
     let r = await P.rewarded(mute);
     if (r === 'demo') r = await demoAd();
     if (!r) toast(t('adFail'));
@@ -2300,10 +2315,24 @@ window.__SKINS__ = "data:image/webp;base64,UklGRvANAgBXRUJQVlA4WAoAAAAQAAAA/wIAf
     screen = name;
     ov.innerHTML = `<div class="card ${cls || ''}${same ? ' still' : ''}" role="dialog" aria-modal="true">${html}</div>`;
     ov.hidden = false;
+    gateRewarded();
     const f = ov.querySelector('[data-focus]') || ov.querySelector('button:not([disabled])');
     if (f) setTimeout(() => f.focus({ preventScroll: true }), 40);
   }
   function hide() { screen = ''; ov.hidden = true; ov.innerHTML = ''; }
+  /** buttons that promise a rewarded ad disappear when the platform has none to give; the next button takes the lead */
+  const AD_ACTS = ['cont', 'chestAd'];
+  async function gateRewarded() {
+    const btns = [...ov.querySelectorAll(AD_ACTS.map((a) => `[data-act="${a}"]`).join(','))];
+    if (!btns.length) return;
+    const shown = screen, ok = await P.canRewarded();
+    if (ok || screen !== shown) return;
+    for (const b of btns) {
+      const next = b.nextElementSibling;
+      b.remove();
+      if (next && next.classList.contains('btn')) { next.classList.remove('ghost'); next.classList.add('primary'); next.focus({ preventScroll: true }); }
+    }
+  }
   const btn = (act, label, cls, extra) => `<button class="btn ${cls || 'ghost'}" data-act="${act}" ${extra || ''}>${label}</button>`;
   const img = (src, cls) => `<img src="${src}" alt="" class="${cls || ''}">`;
   const boosterImg = (id) => G.previewCode({ fire: G.codes.FIRE, bolt: G.codes.BOLT, rainbow: G.codes.RAINBOW }[id]);
@@ -2611,14 +2640,22 @@ window.__SKINS__ = "data:image/webp;base64,UklGRvANAgBXRUJQVlA4WAoAAAAQAAAA/wIAf
   // ---- actions -------------------------------------------------------------------
   async function act(a, d) {
     switch (a) {
-      case 'main': hide(); mainMenu(); break;
+      case 'main': {   // leaving a result card is a natural break: fullscreen ad (the platform caps how often)
+        const fromEnd = ['over', 'lose', 'win', 'daily'].includes(screen);
+        hide(); if (fromEnd) await interstitial(); mainMenu(); break;
+      }
       case 'continue': hide(); G.resumeSaved(); break;
       case 'endless': hide(); G.start('endless'); break;
       case 'daily': hide(); G.start('daily'); break;
-      case 'adventure': if (G.st.mode === 'over' || G.st.mode === 'won') G.toMenu(); levelMap(); break;
+      case 'adventure': {
+        const fromEnd = ['lose', 'win'].includes(screen);
+        if (G.st.mode === 'over' || G.st.mode === 'won') G.toMenu();
+        if (fromEnd) { hide(); await interstitial(); }
+        levelMap(); break;
+      }
       case 'level': levelIntro(+d.n); break;
       case 'startLevel': hide(); G.start('level', +d.n); break;
-      case 'next': levelIntro(+d.n); break;
+      case 'next': hide(); await interstitial(); levelIntro(+d.n); break;
       case 'retry': hide(); await interstitial(); G.start('level', +d.n); break;
       case 'again': hide(); G.finalizeEndless(); await interstitial(); G.start('endless'); break;
       case 'cont': { const ok = await G.continueRun(); if (ok) hide(); break; }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Store screenshots of real gameplay (1920x1080, or 1080x1920 with `portrait`) from a dist/<target> build.
 
-  python3 tools/make_shots.py <target> <out dir> [portrait]
+  python3 tools/make_shots.py <target> <out dir> [portrait]      (VIEW=WxH@dpr overrides the size)
 
 The storefront SDK is blocked, so the build runs offline; the bot from make_video.py plays.
 """
@@ -12,15 +12,17 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 TARGET, OUT = sys.argv[1], sys.argv[2]
 PORTRAIT = len(sys.argv) > 3 and sys.argv[3] == 'portrait'
 VIEW, DPR = ((540, 960), 2) if PORTRAIT else ((1280, 720), 1.5)
+if os.environ.get('VIEW'):   # e.g. VIEW=1200x600@1 for VK's 2:1 screenshots
+    wh, d = os.environ['VIEW'].split('@'); VIEW, DPR = tuple(int(x) for x in wh.split('x')), float(d)
 SHOTS = [('lumi', 'night', 0, None), ('candy', 'dawn', 1, 'fire'), ('planets', 'aurora', 2, 'nova'), ('gems', 'ocean', 3, None)]
 os.makedirs(OUT, exist_ok=True)
 
 with sync_playwright() as p:
     b = p.chromium.launch(args=['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
     for i, (skin, sky, warm, extra) in enumerate(SHOTS):
-        ctx = b.new_context(viewport={'width': VIEW[0], 'height': VIEW[1]}, device_scale_factor=DPR)
+        ctx = b.new_context(viewport={'width': VIEW[0], 'height': VIEW[1]}, device_scale_factor=DPR, locale='ru-RU')
         pg = ctx.new_page()
-        pg.route('**/*sdk*.js', lambda r: r.abort())
+        pg.route('**/*sdk*.js', lambda r: r.abort()); pg.route('**/browser.min.js', lambda r: r.abort())
         pg.goto((ROOT / f'dist/{TARGET}/index.html').as_uri() + '?debug')
         pg.wait_for_function('window.__lumi && !document.getElementById("ov").hidden', timeout=30000)
         if pg.locator('[data-act=gift]').count(): pg.click('[data-act=gift]')

@@ -4,15 +4,15 @@ from playwright.sync_api import sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MOCK = r"""
-window.__pk = { calls: [], store: {} };
+window.__pk = { calls: [], store: {}, rewardedFill: !/nofill/.test(location.search) };
 const log = (n) => window.__pk.calls.push(n);
 window.PkbSDK = { init: async () => (log('init'), {
   gameStarted() { log('gameStarted'); },
   player: { id: 'p1', name: 'Тест', isAuthorized: false },
   ads: {
     fullscreen: { isSupported: true, canShow: async () => (log('fs.canShow'), true), show: async () => (log('fs.show'), { rendered: true }) },
-    rewarded: { isSupported: true, canShow: async () => true, show: async () => (log('rw.show'), { rendered: true, reward: true }) },
-    preloader: { isSupported: false, canShow: async () => false, show: async () => ({ rendered: false, reason: 'NOT_SUPPORTED' }) },
+    rewarded: { isSupported: true, canShow: async () => (log('rw.canShow'), window.__pk.rewardedFill), show: async () => (log('rw.show'), { rendered: true, reward: true }) },
+    preloader: { isSupported: true, canShow: async () => (log('pl.canShow'), true), show: () => (log('pl.show'), new Promise((r) => setTimeout(() => (log('pl.closed'), r({ rendered: true })), 400))) },
   },
   storage: {
     get: (k) => (log('get:' + k), window.__pk.store[k] ? JSON.parse(JSON.stringify(window.__pk.store[k])) : undefined),
@@ -50,9 +50,29 @@ with sync_playwright() as p:
         info = {'title': title, 'russian': 'Бесконечный' in menu, 'doc.title': pg.title(), 'reward': reward, 'errors': errs or 'none'}
         if not blocked:
             calls = pg.evaluate('__pk.calls')
+            info['preloader before gameStarted'] = calls.index('pl.closed') < calls.index('gameStarted')
             info['calls'] = sorted(set(c for c in calls))
             info['saved'] = bool(pg.evaluate("!!__pk.store['lumipop_save_v1']"))
         print({False: 'SDK', True: 'BLOCKED', 'hang': 'HANGING INIT'}[blocked], info)
         ctx.close()
+    # no rewarded fill: the "continue for an ad" button disappears and "play again" takes the lead
+    ctx = b.new_context(viewport={'width': 390, 'height': 844})
+    pg = ctx.new_page()
+    pg.route('**/sdk/sdk.js', lambda r: r.fulfill(status=200, content_type='application/javascript', body=MOCK))
+    host.write_text('<!doctype html><body style="margin:0"><iframe src="pikabu/index.html?debug&nofill" style="border:0;width:100vw;height:100vh"></iframe></body>')
+    pg.goto(host.as_uri()); pg.wait_for_timeout(500)
+    f = next(x for x in pg.frames if 'nofill' in x.url)
+    f.wait_for_function('window.__lumi && !document.getElementById("ov").hidden', timeout=20000)
+    if f.locator('[data-act=gift]').count(): f.click('[data-act=gift]')
+    f.click('[data-act=endless]'); f.wait_for_timeout(400)
+    f.evaluate('__lumi.fill(9)')
+    for _ in range(60):
+        if f.evaluate('__lumi.st.mode') not in ('play', 'intro'): break
+        f.evaluate("document.querySelector('[data-act=introOk]') && document.querySelector('[data-act=introOk]').click()")
+        f.evaluate('__lumi.aim(-1.2); __lumi.shoot()'); f.wait_for_timeout(250)
+    f.wait_for_selector('[data-act=again]'); f.wait_for_timeout(500)
+    print('NO FILL', {'continue button': f.locator('[data-act=cont]').count(), 'again is primary': 'primary' in f.get_attribute('[data-act=again]', 'class'),
+                      'rewarded shown': 'rw.show' in f.evaluate('__pk.calls')})
+    ctx.close()
     host.unlink()
     b.close()

@@ -59,6 +59,10 @@
           // outside Pikabu (a plain link, no test environment) init never settles: don't let it hold the game
           this._pk = await within(window.PkbSDK.init(), 5000);
           try { this.hasRewarded = !!this._pk.ads.rewarded.isSupported; } catch (e) {}
+          // preloader ad: mobile only, while the game loads; gameStarted() waits for it (see ready())
+          this._preloader = (async () => {
+            try { const pl = this._pk.ads.preloader; if (pl.isSupported && await pl.canShow()) await within(pl.show(), 60000); } catch (e) {}
+          })();
         } else if (TARGET === 'vk' && window.vkBridge && window.parent !== window) {   // outside VK's frame there is nobody to answer
           await within(window.vkBridge.send('VKWebAppInit'), 5000);
           this._vk = window.vkBridge;
@@ -80,7 +84,7 @@
         if (this._ysdk) this._ysdk.features.LoadingAPI && this._ysdk.features.LoadingAPI.ready();
         if (this._cg) this._cg.game.loadingStop();
         if (TARGET === 'poki' && window.PokiSDK) window.PokiSDK.gameLoadingFinished();
-        if (this._pk) this._pk.gameStarted();
+        if (this._pk) Promise.resolve(this._preloader).then(() => { try { this._pk.gameStarted(); } catch (e) {} });
       } catch (e) {}
     },
 
@@ -133,6 +137,16 @@
           if (!r || !r.rendered) console.warn('[platform] fullscreen ad not shown', r && r.reason);
         }
       } catch (e) { mute(false); }
+    },
+
+    /** Is a rewarded video likely to be there right now? Buttons that promise one hide when it is not. */
+    async canRewarded() {
+      try {
+        if (TARGET === 'web') return true;                       // demo stand-in
+        if (this._pk) return this._pk.ads.rewarded.isSupported && await within(this._pk.ads.rewarded.canShow(), 3000);
+        if (this._vk) { const r = await within(this._vk.send('VKWebAppCheckNativeAds', { ad_format: 'reward' }), 3000); return !!(r && r.result); }
+        return !!(this._ysdk || this._cg || (TARGET === 'poki' && window.PokiSDK));
+      } catch (e) { return false; }
     },
 
     /** Rewarded video. Resolves true only if the reward was earned. */

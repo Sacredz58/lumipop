@@ -10,6 +10,7 @@ import base64, json, os, sys
 from playwright.sync_api import sync_playwright
 
 MODE, OUT = sys.argv[1], sys.argv[2]
+TARGET, LOCALE = os.environ.get('TARGET', 'web'), os.environ.get('LOCALE', 'en-US')   # e.g. TARGET=vk LOCALE=ru-RU for a Russian UI
 FPS = 30
 VIEW = {'landscape': ((1280, 720), 1.5), 'portrait': ((540, 810), 2)}[MODE]
 # (orb skin, sky, seconds, extra action)
@@ -22,9 +23,10 @@ with sync_playwright() as p:
     only = [int(x) for x in os.environ.get('ONLY', '').split(',') if x]
     for ci, (skin, sky, secs, extra) in enumerate(CLIPS):
         if only and ci not in only: continue
-        ctx = b.new_context(viewport={'width': VIEW[0][0], 'height': VIEW[0][1]}, device_scale_factor=VIEW[1], locale='en-US')
+        ctx = b.new_context(viewport={'width': VIEW[0][0], 'height': VIEW[0][1]}, device_scale_factor=VIEW[1], locale=LOCALE)
         pg = ctx.new_page()
-        pg.goto('http://127.0.0.1:8766/web/index.html?debug')
+        pg.route('**/*sdk*.js', lambda r: r.abort()); pg.route('**/browser.min.js', lambda r: r.abort())
+        pg.goto(f'http://127.0.0.1:8766/{TARGET}/index.html?debug')
         pg.wait_for_function('!!window.__lumi', timeout=30000)
         if pg.locator('[data-act=gift]').count(): pg.click('[data-act=gift]')
         pg.evaluate(f'''() => {{ const M = __lumi.M; M.seen = () => true; for (const k of ['star','ice','bomb','stone','cham']) M.d.seen['sp_' + k] = 1;
