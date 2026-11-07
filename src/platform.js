@@ -63,8 +63,10 @@
           this._preloader = (async () => {
             try { const pl = this._pk.ads.preloader; if (pl.isSupported && await pl.canShow()) await within(pl.show(), 60000); } catch (e) {}
           })();
-        } else if (TARGET === 'vk' && window.vkBridge && window.parent !== window) {   // outside VK's frame there is nobody to answer
-          await within(window.vkBridge.send('VKWebAppInit'), 5000);
+        } else if (TARGET === 'vk' && window.vkBridge && window.vkBridge.isEmbedded()) {
+          // embedded = VK's iframe on the web OR the WebView of the VK app on a phone (no frame there!);
+          // opened directly there is nobody to answer. The init itself was sent by index.html before the game loaded.
+          await within(window.__vkInit || window.vkBridge.send('VKWebAppInit'), 5000);
           this._vk = window.vkBridge;
           this.lang = urlParam('vk_language') === '3' ? 'en' : 'ru';   // VK: Russian unless the VK interface is English
           this._vk.subscribe((e) => {

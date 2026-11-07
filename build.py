@@ -14,7 +14,8 @@ SDK = {
     'yandex': '<script src="/sdk.js"></script>',
     'crazygames': '<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>',
     'poki': '<script src="https://game-cdn.poki.com/scripts/v2/poki-sdk.js"></script>',
-    'vk': '<script src="https://unpkg.com/@vkontakte/vk-bridge@2.15.2/dist/browser.min.js"></script>',
+    # VK Bridge is shipped with the game (a CDN may be unreachable); VKWebAppInit goes out before Pixi and the game load
+    'vk': '<script src="vk-bridge.min.js"></script>\n<script>window.vkBridge && vkBridge.isEmbedded() && (window.__vkInit = vkBridge.send(\'VKWebAppInit\')).catch(function () {})</script>',
     'pikabu': '<script src="https://games.pikabu.ru/sdk/sdk.js"></script>',
 }
 PIXI_CDN = 'https://cdn.jsdelivr.net/npm/pixi.js@8.6.6/dist/pixi.min.js'
@@ -68,6 +69,8 @@ def build_target(name):
     shutil.copy(os.path.join(VENDOR, 'lumi.woff'), out)
     if os.path.exists(os.path.join(VENDOR, 'music.mp3')):
         shutil.copy(os.path.join(VENDOR, 'music.mp3'), out)
+    if name == 'vk':
+        shutil.copy(os.path.join(VENDOR, 'vk-bridge.min.js'), out)
     z = os.path.join(DIST, f'lumipop-{name}.zip')
     with zipfile.ZipFile(z, 'w', zipfile.ZIP_DEFLATED) as zf:
         for fn in sorted(os.listdir(out)):          # index.html at the archive root

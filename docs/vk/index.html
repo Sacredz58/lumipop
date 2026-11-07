@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Lumi Pop</title>
-<script src="https://unpkg.com/@vkontakte/vk-bridge@2.15.2/dist/browser.min.js"></script>
+<script src="vk-bridge.min.js"></script>
+<script>window.vkBridge && vkBridge.isEmbedded() && (window.__vkInit = vkBridge.send('VKWebAppInit')).catch(function () {})</script>
 <script>window.__TARGET__="vk"</script>
 <style>
 @font-face{font-family:Lumi;src:url(lumi.woff) format('woff');font-weight:800;font-display:block}

@@ -25,7 +25,7 @@ with sync_playwright() as p:
         if only and ci not in only: continue
         ctx = b.new_context(viewport={'width': VIEW[0][0], 'height': VIEW[0][1]}, device_scale_factor=VIEW[1], locale=LOCALE)
         pg = ctx.new_page()
-        pg.route('**/*sdk*.js', lambda r: r.abort()); pg.route('**/browser.min.js', lambda r: r.abort())
+        pg.route('**/*sdk*.js', lambda r: r.abort()); pg.route('**/vk-bridge.min.js', lambda r: r.abort())
         pg.goto(f'http://127.0.0.1:8766/{TARGET}/index.html?debug')
         pg.wait_for_function('!!window.__lumi', timeout=30000)
         if pg.locator('[data-act=gift]').count(): pg.click('[data-act=gift]')

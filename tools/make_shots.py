@@ -22,7 +22,7 @@ with sync_playwright() as p:
     for i, (skin, sky, warm, extra) in enumerate(SHOTS):
         ctx = b.new_context(viewport={'width': VIEW[0], 'height': VIEW[1]}, device_scale_factor=DPR, locale='ru-RU')
         pg = ctx.new_page()
-        pg.route('**/*sdk*.js', lambda r: r.abort()); pg.route('**/browser.min.js', lambda r: r.abort())
+        pg.route('**/*sdk*.js', lambda r: r.abort()); pg.route('**/vk-bridge.min.js', lambda r: r.abort())
         pg.goto((ROOT / f'dist/{TARGET}/index.html').as_uri() + '?debug')
         pg.wait_for_function('window.__lumi && !document.getElementById("ov").hidden', timeout=30000)
         if pg.locator('[data-act=gift]').count(): pg.click('[data-act=gift]')

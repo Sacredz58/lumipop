@@ -9,9 +9,9 @@ MOCK = {
    commercialBreak:async(f)=>{L('commercial');f&&f()},rewardedBreak:async(f)=>{L('rewarded');f&&f();return true}};""",
  'crazygames': LOG + """window.CrazyGames={SDK:{init:async()=>L('init'),game:{loadingStart:()=>L('loadStart'),loadingStop:()=>L('ready'),gameplayStart:()=>L('gpStart'),gameplayStop:()=>L('gpStop')},
    ad:{requestAd:(t,c)=>{L('ad:'+t);c.adStarted();setTimeout(()=>c.adFinished(),200)}},data:{getItem:()=>{L('getItem');return null},setItem:()=>L('setItem')}}};""",
- 'vk': LOG + """window.vkBridge={send:async(m,p)=>{L(m+(p&&p.ad_format?':'+p.ad_format:''));if(m==='VKWebAppStorageGet')return {keys:[{key:'x',value:''}]};return {result:true}},subscribe:()=>L('subscribe')};""",
+ 'vk': LOG + """window.vkBridge={send:async(m,p)=>{L(m+(p&&p.ad_format?':'+p.ad_format:''));if(m==='VKWebAppStorageGet')return {keys:[{key:'x',value:''}]};return {result:true}},subscribe:()=>L('subscribe'),isEmbedded:()=>window.parent!==window};""",
 }
-URL = {'yandex': '**/sdk.js', 'poki': '**/poki-sdk.js', 'crazygames': '**/crazygames-sdk-v3.js', 'vk': '**/browser.min.js'}
+URL = {'yandex': '**/sdk.js', 'poki': '**/poki-sdk.js', 'crazygames': '**/crazygames-sdk-v3.js', 'vk': '**/vk-bridge.min.js'}
 
 
 def play_until_over(pg, angle):
@@ -58,7 +58,7 @@ with sync_playwright() as p:
     # VK build opened directly with a bridge that never answers: the menu still comes up
     pg = b.new_page(viewport={'width': 390, 'height': 844}); errs = []
     pg.on('pageerror', lambda e: errs.append(str(e)))
-    pg.route('**/browser.min.js', lambda r: r.fulfill(status=200, content_type='application/javascript', body='window.vkBridge={send:()=>new Promise(()=>{}),subscribe:()=>{}};'))
+    pg.route('**/vk-bridge.min.js', lambda r: r.fulfill(status=200, content_type='application/javascript', body='window.vkBridge={send:()=>new Promise(()=>{}),subscribe:()=>{},isEmbedded:()=>window.parent!==window};'))
     pg.goto('http://127.0.0.1:8766/vk/index.html?debug')
     pg.wait_for_function('window.__lumi && !document.getElementById("ov").hidden', timeout=15000)
     print('vk direct | menu up, lang', pg.evaluate('document.documentElement.lang'), '| errors:', errs or 'none')
